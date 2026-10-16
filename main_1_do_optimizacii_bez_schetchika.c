@@ -52,6 +52,7 @@ int human_color = WHITE_MAN;
 int board[8][8];
 
 long long nodes = 0;
+long long tt_hits = 0;
 
 int selected_r = -1, selected_c = -1;
 int possible_moves[8][8];
@@ -106,18 +107,6 @@ typedef struct {
 } TTEntry;
 
 static TTEntry tt[TT_SIZE];
-
-void clear_tt(void) {
-    memset(tt, 0, sizeof(tt));
-}
-
-static void tt_store(TTEntry* e, uint64_t hash, int depth, int value) {
-    e->key = hash;
-    e->value = value;
-    e->depth = (short)depth;
-    e->used = 1;
-}
-
 static uint64_t zobrist[64][4];
 static uint64_t zobrist_side;
 static uint64_t rng_state = 88172645463325252ULL;
@@ -134,6 +123,10 @@ void init_zobrist(void) {
         for (int k = 0; k < 4; k++)
             zobrist[i][k] = rand64();
     zobrist_side = rand64();
+}
+
+void clear_tt(void) {
+    memset(tt, 0, sizeof(tt));
 }
 
 static int piece_index(int p) {
@@ -155,6 +148,13 @@ uint64_t compute_hash(void) {
     if (current_player == BLACK_MAN)
         h ^= zobrist_side;
     return h;
+}
+
+static void tt_store(TTEntry* e, uint64_t hash, int depth, int value) {
+    e->key = hash;
+    e->value = value;
+    e->depth = (short)depth;
+    e->used = 1;
 }
 
 void search_captures(int r, int c, int player, Move current,
@@ -362,6 +362,7 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
     uint64_t hash = compute_hash();
     TTEntry* e = &tt[hash & (TT_SIZE - 1)];
     if (e->used && e->key == hash && e->depth == depth) {
+        tt_hits++;
         return e->value;
     }
 
@@ -714,6 +715,8 @@ void bench() {
     for (int d = 4; d <= 12; d++) {
         init_board();
         nodes = 0;
+        tt_hits = 0;
+        clear_tt();
         int best = -INF;
         clock_t t0 = clock();
 
@@ -730,7 +733,7 @@ void bench() {
             unmake_move(&moves[i], backup, prev);
         }
         double sec = (double)(clock() - t0) / CLOCKS_PER_SEC;
-        printf("depth %d: %.3f s, nodes %lld, best %d\n", d, sec, nodes, best);
+        printf("depth %d: %.3f s, nodes %lld, hits %lld, best %d\n", d, sec, nodes, tt_hits, best);
         fflush(stdout);
     }
 }
