@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #ifdef __APPLE__
 #include <GLUT/glut.h>
@@ -33,6 +34,8 @@
 #define MAX_MOVES 512
 #define INF 1000000
 
+#define BENCH 1
+
 typedef struct {
     int from_r, from_c;
     int to_r, to_c;
@@ -46,6 +49,8 @@ int current_player = WHITE_MAN;
 int human_color = WHITE_MAN;
 
 int board[8][8];
+
+long long nodes = 0;
 
 int selected_r = -1, selected_c = -1;
 int possible_moves[8][8];
@@ -288,6 +293,8 @@ int evaluate() {
 }
 
 int minimax(int depth, int alpha, int beta, int maximizing) {
+    nodes++;
+
     Move moves[MAX_MOVES];
     int count;
     generate_moves(current_player, moves, &count);
@@ -625,7 +632,38 @@ void keyboard(unsigned char key, int x, int y) {
     glutPostRedisplay();
 }
 
+void bench() {
+    for (int d = 4; d <= 12; d++) {
+        init_board();
+        nodes = 0;
+        int best = -INF;
+        clock_t t0 = clock();
+
+        Move moves[MAX_MOVES];
+        int count;
+        generate_moves(current_player, moves, &count);
+        for (int i = 0; i < count; i++) {
+            int backup[8][8];
+            copy_board(board, backup);
+            int prev = current_player;
+            make_move(&moves[i]);
+            int v = minimax(d - 1, -INF, INF, (current_player == WHITE_MAN) ? 1 : 0);
+            if (v > best) best = v;
+            unmake_move(&moves[i], backup, prev);
+        }
+        double sec = (double)(clock() - t0) / CLOCKS_PER_SEC;
+        printf("depth %d: %.3f s, nodes %lld, best %d\n", d, sec, nodes, best);
+        fflush(stdout);
+    }
+}
+
 int main(int argc, char** argv) {
+#if BENCH
+    bench();
+    printf("Done. Press Enter...\n");
+    getchar();
+    return 0;
+#endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutInitWindowSize(WIDTH, HEIGHT);
