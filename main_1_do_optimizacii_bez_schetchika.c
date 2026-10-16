@@ -121,6 +121,20 @@ static int piece_index(int p) {
     return 3;
 }
 
+uint64_t compute_hash(void) {
+    uint64_t h = 0;
+    for (int r = 0; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            int p = board[r][c];
+            if (p != EMPTY)
+                h ^= zobrist[r * 8 + c][piece_index(p)];
+        }
+    }
+    if (current_player == BLACK_MAN)
+        h ^= zobrist_side;
+    return h;
+}
+
 void search_captures(int r, int c, int player, Move current,
     Move moves[], int* count, int temp_board[8][8]) {
 
