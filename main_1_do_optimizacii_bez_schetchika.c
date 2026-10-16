@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 #include <time.h>
 
 #ifdef __APPLE__
@@ -93,6 +94,31 @@ void init_board() {
     selected_r = selected_c = -1;
     memset(possible_moves, 0, sizeof(possible_moves));
     winner_message[0] = '\0';
+}
+
+static uint64_t zobrist[64][4];
+static uint64_t zobrist_side;
+static uint64_t rng_state = 88172645463325252ULL;
+
+static uint64_t rand64(void) {
+    rng_state ^= rng_state << 13;
+    rng_state ^= rng_state >> 7;
+    rng_state ^= rng_state << 17;
+    return rng_state;
+}
+
+void init_zobrist(void) {
+    for (int i = 0; i < 64; i++)
+        for (int k = 0; k < 4; k++)
+            zobrist[i][k] = rand64();
+    zobrist_side = rand64();
+}
+
+static int piece_index(int p) {
+    if (p == WHITE_MAN) return 0;
+    if (p == BLACK_MAN) return 1;
+    if (p == WHITE_KING) return 2;
+    return 3;
 }
 
 void search_captures(int r, int c, int player, Move current,
@@ -658,6 +684,7 @@ void bench() {
 }
 
 int main(int argc, char** argv) {
+    init_zobrist();
 #if BENCH
     bench();
     printf("Done. Press Enter...\n");
