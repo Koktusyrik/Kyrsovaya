@@ -96,6 +96,28 @@ void init_board() {
     winner_message[0] = '\0';
 }
 
+#define TT_SIZE (1 << 21)
+
+typedef struct {
+    uint64_t key;
+    int value;
+    short depth;
+    char used;
+} TTEntry;
+
+static TTEntry tt[TT_SIZE];
+
+void clear_tt(void) {
+    memset(tt, 0, sizeof(tt));
+}
+
+static void tt_store(TTEntry* e, uint64_t hash, int depth, int value) {
+    e->key = hash;
+    e->value = value;
+    e->depth = (short)depth;
+    e->used = 1;
+}
+
 static uint64_t zobrist[64][4];
 static uint64_t zobrist_side;
 static uint64_t rng_state = 88172645463325252ULL;
