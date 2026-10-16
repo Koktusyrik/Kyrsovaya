@@ -357,13 +357,25 @@ int evaluate() {
 int minimax(int depth, int alpha, int beta, int maximizing) {
     nodes++;
 
+    int orig_alpha = alpha;
+    int orig_beta = beta;
+    uint64_t hash = compute_hash();
+    TTEntry* e = &tt[hash & (TT_SIZE - 1)];
+    if (e->used && e->key == hash && e->depth == depth) {
+        return e->value;
+    }
+
     Move moves[MAX_MOVES];
     int count;
     generate_moves(current_player, moves, &count);
 
-    if (depth == 0 || count == 0)
-        return evaluate();
+    if (depth == 0 || count == 0) {
+        int v = evaluate();
+        tt_store(e, hash, depth, v);
+        return v;
+    }
 
+    int result;
     if (maximizing) {
         int max_eval = -INF;
         for (int i = 0; i < count; i++) {
@@ -378,7 +390,7 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
             if (eval > alpha) alpha = eval;
             if (beta <= alpha) break;
         }
-        return max_eval;
+        result = max_eval;
     }
     else {
         int min_eval = INF;
@@ -395,8 +407,12 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
             if (eval < beta) beta = eval;
             if (beta <= alpha) break;
         }
-        return min_eval;
+        result = min_eval;
     }
+
+    if (result > orig_alpha && result < orig_beta)
+        tt_store(e, hash, depth, result);
+    return result;
 }
 
 void computer_move() {
