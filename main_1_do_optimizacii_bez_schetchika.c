@@ -79,6 +79,9 @@ void copy_board(int src[8][8], int dst[8][8]) {
     memcpy(dst, src, sizeof(int) * 64);
 }
 
+uint64_t cur_hash = 0;
+uint64_t compute_hash(void);
+
 void init_board() {
     for (int r = 0; r < 8; r++)
         for (int c = 0; c < 8; c++)
@@ -95,6 +98,7 @@ void init_board() {
     selected_r = selected_c = -1;
     memset(possible_moves, 0, sizeof(possible_moves));
     winner_message[0] = '\0';
+    cur_hash = compute_hash();
 }
 
 #define TT_SIZE (1 << 21)
@@ -157,13 +161,13 @@ static void tt_store(TTEntry* e, uint64_t hash, int depth, int value) {
     e->used = 1;
 }
 
-void search_captures(int r, int c, int player, Move current,
+void search_captures(int r, int c, int player, const Move* current,
     Move moves[], int* count, int temp_board[8][8]) {
 
     int piece = temp_board[r][c];
     int found = 0;
 
-    int dirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
+    static const int dirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
 
     for (int d = 0; d < 4; d++) {
         int dr = dirs[d][0];
@@ -201,14 +205,14 @@ void search_captures(int r, int c, int player, Move current,
                     backup[enemy_r][enemy_c] = EMPTY;
                     backup[r2][c2] = piece;
 
-                    Move next = current;
+                    Move next = *current;
                     next.to_r = r2;
                     next.to_c = c2;
                     next.captured[next.captured_count][0] = enemy_r;
                     next.captured[next.captured_count][1] = enemy_c;
                     next.captured_count++;
 
-                    search_captures(r2, c2, player, next, moves, count, backup);
+                    search_captures(r2, c2, player, &next, moves, count, backup);
 
                     r2 += dr;
                     c2 += dc;
@@ -233,20 +237,20 @@ void search_captures(int r, int c, int player, Move current,
                 backup[r1][c1] = EMPTY;
                 backup[r2][c2] = piece;
 
-                Move next = current;
+                Move next = *current;
                 next.to_r = r2;
                 next.to_c = c2;
                 next.captured[next.captured_count][0] = r1;
                 next.captured[next.captured_count][1] = c1;
                 next.captured_count++;
 
-                search_captures(r2, c2, player, next, moves, count, backup);
+                search_captures(r2, c2, player, &next, moves, count, backup);
             }
         }
     }
 
-    if (!found && current.captured_count > 0) {
-        moves[(*count)++] = current;
+    if (!found && current->captured_count > 0) {
+        moves[(*count)++] = *current;
     }
 }
 
@@ -262,7 +266,7 @@ void generate_moves(int player, Move moves[], int* count) {
             Move start = { r, c, r, c, 0 };
             int temp[8][8];
             copy_board(board, temp);
-            search_captures(r, c, player, start, captures, &cap_count, temp);
+            search_captures(r, c, player, &start, captures, &cap_count, temp);
         }
     }
 
@@ -272,7 +276,7 @@ void generate_moves(int player, Move moves[], int* count) {
         return;
     }
 
-    int dirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
+    static const int dirs[4][2] = { {-1,-1},{-1,1},{1,-1},{1,1} };
 
     for (int r = 0; r < 8; r++) {
         for (int c = 0; c < 8; c++) {
@@ -308,7 +312,31 @@ void generate_moves(int player, Move moves[], int* count) {
     }
 }
 
+static uint64_t zcell(int p, int idx) {
+    return p == EMPTY ? 0 : zobrist[idx][piece_index(p)];
+}
+
+static int move_cells(Move* m, int cells[14]) {
+    int n = 0;
+    cells[n++] = m->from_r * 8 + m->from_c;
+    int t = m->to_r * 8 + m->to_c;
+    if (t != cells[0]) cells[n++] = t;
+    for (int i = 0; i < m->captured_count; i++) {
+        int x = m->captured[i][0] * 8 + m->captured[i][1];
+        int dup = 0;
+        for (int j = 0; j < n; j++)
+            if (cells[j] == x) { dup = 1; break; }
+        if (!dup) cells[n++] = x;
+    }
+    return n;
+}
+
 void make_move(Move* m) {
+    int cells[14], old[14];
+    int n = move_cells(m, cells);
+    for (int i = 0; i < n; i++)
+        old[i] = board[cells[i] / 8][cells[i] % 8];
+
     int piece = board[m->from_r][m->from_c];
     board[m->from_r][m->from_c] = EMPTY;
     board[m->to_r][m->to_c] = piece;
@@ -324,10 +352,20 @@ void make_move(Move* m) {
     if (piece == BLACK_MAN && m->to_r == 7)
         board[m->to_r][m->to_c] = BLACK_KING;
 
+    for (int i = 0; i < n; i++)
+        cur_hash ^= zcell(old[i], cells[i]) ^ zcell(board[cells[i] / 8][cells[i] % 8], cells[i]);
     current_player = -current_player;
+    cur_hash ^= zobrist_side;
 }
 
 void unmake_move(Move* m, int backup[8][8], int prev_player) {
+    int cells[14];
+    int n = move_cells(m, cells);
+    for (int i = 0; i < n; i++) {
+        int r = cells[i] / 8, c = cells[i] % 8;
+        cur_hash ^= zcell(board[r][c], cells[i]) ^ zcell(backup[r][c], cells[i]);
+    }
+    cur_hash ^= zobrist_side;
     copy_board(backup, board);
     current_player = prev_player;
 }
@@ -359,7 +397,7 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
 
     int orig_alpha = alpha;
     int orig_beta = beta;
-    uint64_t hash = compute_hash();
+    uint64_t hash = cur_hash;
     TTEntry* e = &tt[hash & (TT_SIZE - 1)];
     if (e->used && e->key == hash && e->depth == depth) {
         tt_hits++;
