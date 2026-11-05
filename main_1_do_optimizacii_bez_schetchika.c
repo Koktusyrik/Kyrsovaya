@@ -37,11 +37,13 @@
 
 #define BENCH 1
 
+typedef signed char cell_t;
+
 typedef struct {
-    int from_r, from_c;
-    int to_r, to_c;
-    int captured_count;
-    int captured[12][2];
+    cell_t from_r, from_c;
+    cell_t to_r, to_c;
+    cell_t captured_count;
+    cell_t captured[12][2];
 } Move;
 
 int game_state = MENU_MAIN;
@@ -49,7 +51,7 @@ int game_mode = MODE_HUMAN_VS_HUMAN;
 int current_player = WHITE_MAN;
 int human_color = WHITE_MAN;
 
-int board[8][8];
+cell_t board[8][8];
 
 long long nodes = 0;
 long long tt_hits = 0;
@@ -75,8 +77,8 @@ int is_king(int piece) {
     return piece == WHITE_KING || piece == BLACK_KING;
 }
 
-void copy_board(int src[8][8], int dst[8][8]) {
-    memcpy(dst, src, sizeof(int) * 64);
+void copy_board(cell_t src[8][8], cell_t dst[8][8]) {
+    memcpy(dst, src, 64);
 }
 
 uint64_t cur_hash = 0;
@@ -162,7 +164,7 @@ static void tt_store(TTEntry* e, uint64_t hash, int depth, int value) {
 }
 
 void search_captures(int r, int c, int player, const Move* current,
-    Move moves[], int* count, int temp_board[8][8]) {
+    Move moves[], int* count, cell_t temp_board[8][8]) {
 
     int piece = temp_board[r][c];
     int found = 0;
@@ -198,7 +200,7 @@ void search_captures(int r, int c, int player, const Move* current,
                 int c2 = enemy_c + dc;
                 while (in_board(r2, c2) && temp_board[r2][c2] == EMPTY) {
                     found = 1;
-                    int backup[8][8];
+                    cell_t backup[8][8];
                     copy_board(temp_board, backup);
 
                     backup[r][c] = EMPTY;
@@ -230,7 +232,7 @@ void search_captures(int r, int c, int player, const Move* current,
                 temp_board[r2][c2] == EMPTY) {
 
                 found = 1;
-                int backup[8][8];
+                cell_t backup[8][8];
                 copy_board(temp_board, backup);
 
                 backup[r][c] = EMPTY;
@@ -264,7 +266,7 @@ void generate_moves(int player, Move moves[], int* count) {
             if (!is_friend(player, board[r][c])) continue;
 
             Move start = { r, c, r, c, 0 };
-            int temp[8][8];
+            cell_t temp[8][8];
             copy_board(board, temp);
             search_captures(r, c, player, &start, captures, &cap_count, temp);
         }
@@ -358,7 +360,7 @@ void make_move(Move* m) {
     cur_hash ^= zobrist_side;
 }
 
-void unmake_move(Move* m, int backup[8][8], int prev_player) {
+void unmake_move(Move* m, cell_t backup[8][8], int prev_player) {
     int cells[14];
     int n = move_cells(m, cells);
     for (int i = 0; i < n; i++) {
@@ -418,7 +420,7 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
     if (maximizing) {
         int max_eval = -INF;
         for (int i = 0; i < count; i++) {
-            int backup[8][8];
+            cell_t backup[8][8];
             copy_board(board, backup);
             int prev = current_player;
             make_move(&moves[i]);
@@ -434,7 +436,7 @@ int minimax(int depth, int alpha, int beta, int maximizing) {
     else {
         int min_eval = INF;
         for (int i = 0; i < count; i++) {
-            int backup[8][8];
+            cell_t backup[8][8];
             copy_board(board, backup);
             int prev = current_player;
 
@@ -465,7 +467,7 @@ void computer_move() {
 
     for (int depth = 4; depth <= 8; depth++) {
         for (int i = 0; i < count; i++) {
-            int backup[8][8];
+            cell_t backup[8][8];
             copy_board(board, backup);
             int prev = current_player;
 
@@ -762,7 +764,7 @@ void bench() {
         int count;
         generate_moves(current_player, moves, &count);
         for (int i = 0; i < count; i++) {
-            int backup[8][8];
+            cell_t backup[8][8];
             copy_board(board, backup);
             int prev = current_player;
             make_move(&moves[i]);
